@@ -108,74 +108,108 @@ def _get_current_model() -> str | None:
         return None
 
 
-def _get_text_content(content: str | list[dict[str, Any]]) -> str:
+def _block_type(block: Any) -> str:
+    """Get the type from either a dict or an Anthropic SDK object."""
+    if isinstance(block, dict):
+        return block.get("type", "")
+    return str(getattr(block, "type", ""))
+
+
+def _block_text(block: Any) -> str:
+    """Get text from a dict or Anthropic SDK object (ParsedTextBlock, ThinkingBlock)."""
+    if isinstance(block, dict):
+        return str(block.get("text", block.get("thinking", "")))
+    return str(getattr(block, "text", getattr(block, "thinking", "")))
+
+
+def _get_text_content(content: str | list[Any]) -> str:
+    """Extract all text and thinking content from a message."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
         parts = [
-            b.get("text", "")
-            for b in content
-            if isinstance(b, dict) and b.get("type") == "text"
+            _block_text(b) for b in content
+            if _block_type(b) in ("text", "thinking")
         ]
-        return " ".join(parts) if parts else str(content)
+        return " ".join(parts) if parts else ""
     return str(content)
 
 
-def _is_tool_only(content: str | list[dict[str, Any]]) -> bool:
-    """Check if a message content only has tool blocks (no user/assistant text)."""
+def _is_tool_only(content: str | list[Any]) -> bool:
+    """True if the message only has tool-related blocks (no text/thinking)."""
     return isinstance(content, list) and not any(
-        isinstance(b, dict) and b.get("type") == "text" and b.get("text", "").strip()
+        _block_type(b) in ("text", "thinking") and _block_text(b).strip()
         for b in content
     )
 
 
-def _collect_blocks(
-    content: str | list[dict[str, Any]], block_type: str
-) -> list[dict[str, Any]]:
+def _collect_blocks(content: str | list[Any], block_type: str) -> list[Any]:
     if not isinstance(content, list):
         return []
-    return [b for b in content if isinstance(b, dict) and b.get("type") == block_type]
+    return [b for b in content if _block_type(b) == block_type]
 
 
 def _record_latest_turn(
     history: list[MessageParam],
     round_usages: list[Usage] | None,
 ) -> None:
-    user_msg = None
-    assistant_msg = None
-    tool_calls: list[dict[str, Any]] = []
-    tool_results: list[dict[str, Any]] = []
-
-    # Walk backwards. Skip intermediate tool-only messages to find the
-    # real user query and final assistant response.
-    for msg in reversed(history):
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-
-        if role == "assistant" and assistant_msg is None:
-            text = _get_text_content(content)
-            if text.strip():
-                assistant_msg = text
-                tool_calls = _collect_blocks(content, "tool_use")
-
-        elif role == "user" and user_msg is None:
-            # Skip messages that are only tool results (bash output, etc.)
-            if _is_tool_only(content):
-                tool_results = _collect_blocks(content, "tool_result")
-                continue
-            user_msg = _get_text_content(content)
-
-        if user_msg is not None and assistant_msg is not None:
+    # Find the last real user query (skip tool_result-only messages).
+    user_idx = None
+    for i in range(len(history) - 1, -1, -1):
+        if history[i].get("role") == "user" and not _is_tool_only(
+            history[i].get("content", "")
+        ):
+            user_idx = i
             break
 
-    if user_msg is None:
+    if user_idx is None:
         _log("  no user message found in last turn, skipping")
         return
 
-    # Only count turns with actual text responses (skip tool_use-only rounds)
+    user_msg = _get_text_content(history[user_idx].get("content", ""))
+
+    # Find the last assistant response after the user query.
+    assistant_idx = None
+    for i in range(len(history) - 1, user_idx, -1):
+        if history[i].get("role") == "assistant":
+            assistant_idx = i
+            break
+
+    assistant_msg = None
+    tool_calls = []
+    tool_results = []
+
+    if assistant_idx is not None:
+        # Collect the assistant message text from the last assistant response.
+        content = history[assistant_idx].get("content", "")
+        text = _get_text_content(content)
+        tool_calls_in_last = _collect_blocks(content, "tool_use")
+        if text.strip():
+            assistant_msg = text
+        elif tool_calls_in_last:
+            names = [_block_text(tc) or _block_type(tc) for tc in tool_calls_in_last[:3]]
+            assistant_msg = f"[tool_calls: {', '.join(names)}]"
+
+    # Scan ALL messages from user_idx+1 to the end for tool_use and tool_result
+    # blocks — they may be in earlier assistant/user messages within this turn.
+    all_tool_calls = []
+    all_tool_results = []
+    for i in range(user_idx + 1, len(history)):
+        msg = history[i]
+        role = msg.get("role", "")
+        content = msg.get("content", "")
+        if role == "assistant":
+            all_tool_calls.extend(_collect_blocks(content, "tool_use"))
+        elif role == "user":
+            all_tool_results.extend(_collect_blocks(content, "tool_result"))
+
+    tool_calls = all_tool_calls or None
+    tool_results = all_tool_results or None
+
+    # Count turns by real user messages (not tool results).
     turn_number = sum(
         1 for m in history
-        if m.get("role") == "assistant" and _get_text_content(m.get("content", "")).strip()
+        if m.get("role") == "user" and not _is_tool_only(m.get("content", ""))
     )
 
     usage_kwargs: dict[str, int] = {}
@@ -196,14 +230,16 @@ def _record_latest_turn(
     _log(f"  recording turn {turn_number}: user_msg={user_msg[:60]!r}...")
     if usage_kwargs:
         _log(f"  usage: {usage_kwargs}")
+    if tool_calls:
+        _log(f"  tool_calls: {len(tool_calls)} tools")
 
     try:
         record_turn_observation(
             trace_name=f"agent-turn-{turn_number}",
             user_message=user_msg,
             assistant_message=assistant_msg,
-            tool_calls=tool_calls if tool_calls else None,
-            tool_results=tool_results if tool_results else None,
+            tool_calls=tool_calls,
+            tool_results=tool_results,
             model=model,
             **usage_kwargs,
         )
