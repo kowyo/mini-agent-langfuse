@@ -1,0 +1,36 @@
+[project]
+name = "mini-agent-langfuse"
+version = "0.2.0"
+description = "Langfuse session tracing plugin for mini-agent"
+readme = "README.md"
+authors = [
+    { name = "Kowyo", email = "kowyo@outlook.com" },
+]
+requires-python = ">=3.14"
+dependencies = [
+    "langfuse>=4.7.1",
+    "mini-agent>=0.16.4",
+]
+
+[project.entry-points."mini_agent.plugins"]
+langfuse = "mini_agent_langfuse.plugin:create_plugin"
+
+[project.scripts]
+# No CLI wrapper — the plugin is auto-discovered by mini-agent.
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.15",
+]
