@@ -1,16 +1,16 @@
 .PHONY: install test lint clean
 
 install:
-	pip install -e .
+	uv sync
 
 test:
-	python -m pytest tests/ -v
+	uv run python -m pytest tests/ -v
 
 lint:
-	ruff check src/ tests/
+	uv run ruff check src/ tests/
 
 typing:
-	pyright src/
+	uv run pyright src/
 
 clean:
 	rm -rf dist/ build/ *.egg-info/

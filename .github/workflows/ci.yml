@@ -2,32 +2,36 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.14"]
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Ruff check
+        uses: astral-sh/ruff-action@v4.0.0
+
+      - name: Ruff format
+        uses: astral-sh/ruff-action@v4.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          args: "format --check --diff"
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
-        run: |
-          pip install mini-agent pytest ruff
-          pip install -e .
-
-      - name: Lint
-        run: ruff check src/ tests/
+        run: uv sync
 
       - name: Test
-        run: pytest tests/ -v
+        run: uv run pytest tests/ -v

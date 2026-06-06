@@ -2,7 +2,7 @@
 
 Usage::
 
-    pip install mini-agent-langfuse
+    uv tool install mini-agent --with mini-agent-langfuse
     # Add to ~/.mini-agent/.env:
     #   LANGFUSE_PUBLIC_KEY=pk-lf-...
     #   LANGFUSE_SECRET_KEY=sk-lf-...

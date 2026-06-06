@@ -5,7 +5,15 @@ Langfuse session tracing plugin for [mini-agent](https://github.com/kowyo/mini-a
 ## Install
 
 ```bash
-pip install mini-agent-langfuse
+uv tool install mini-agent --with mini-agent-langfuse
+```
+
+Or for local development:
+
+```bash
+git clone https://github.com/kowyo/mini-agent-langfuse
+cd mini-agent-langfuse
+uv sync
 ```
 
 ## Setup

@@ -9,7 +9,7 @@ description: |
 ## Setup
 
 ```bash
-pip install mini-agent-langfuse
+uv tool install mini-agent --with mini-agent-langfuse
 ```
 
 Add to `~/.mini-agent/.env`:
