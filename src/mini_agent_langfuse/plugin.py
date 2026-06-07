@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     from anthropic.types import MessageParam
     from mini_agent.cli.token import Usage
 
-_DEBUG = True
+_DEBUG = os.getenv("LANGFUSE_DEBUG", "1") not in ("0", "false", "False", "")
 
 def _log(msg: str) -> None:
     if _DEBUG:
