@@ -5,7 +5,8 @@ Langfuse session tracing plugin for [mini-agent](https://github.com/kowyo/mini-a
 ## Install
 
 ```bash
-uv tool install mini-agent --with mini-agent-langfuse
+uv tool install git+https://github.com/kowyo/mini-agent.git@main \
+  --with git+https://github.com/kowyo/mini-agent-langfuse.git@main
 ```
 
 Or for local development:

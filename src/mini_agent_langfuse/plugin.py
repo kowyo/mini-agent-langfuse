@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, Any
 
+from mini_agent.plugin import MiniAgentPlugin
+
 from .session import (
     LangfuseSessionScope,
     is_langfuse_configured,
@@ -22,7 +24,7 @@ def _log(msg: str) -> None:
         print(f"[langfuse] {msg}", file=sys.stderr)
 
 
-class LangfusePlugin:
+class LangfusePlugin(MiniAgentPlugin):
     """Hooks into mini-agent lifecycle to trace sessions to Langfuse."""
 
     def __init__(self) -> None:
@@ -55,6 +57,7 @@ class LangfusePlugin:
             scope.__enter__()
             self._scope = scope
             _log("  propagate_attributes scope opened")
+            print(file=sys.stderr)
         except Exception as e:
             _log(f"  FAILED to open scope: {e}")
 
@@ -244,5 +247,6 @@ def _record_latest_turn(
             **usage_kwargs,
         )
         _log(f"  turn {turn_number} recorded")
+        print(file=sys.stderr)
     except Exception as e:
         _log(f"  FAILED to record turn {turn_number}: {e}")
